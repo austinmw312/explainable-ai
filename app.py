@@ -1,7 +1,6 @@
 import streamlit as st
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
-import matplotlib.pyplot as plt
 
 # Set page title and description
 st.title("Explainable Sentiment Analysis")
@@ -58,64 +57,75 @@ if st.button("Analyze"):
                 # Get word importances by removing each word
                 tokens = tokenizer.tokenize(user_input)
                 importances = []
-                contributions = []  # Track if word contributes positively or negatively
-                base_scores = scores  # Save both positive and negative scores
-                
+                contributions = []
+                base_scores = scores
+
                 # Calculate importance of each word by removing it
                 for i in range(len(tokens)):
-                    # Create new text with word removed
                     new_tokens = tokens.copy()
                     new_tokens[i] = tokenizer.pad_token
                     new_text = tokenizer.convert_tokens_to_string(new_tokens)
                     
-                    # Get prediction without this word
                     new_inputs = tokenizer(new_text, return_tensors="pt", truncation=True)
                     with torch.no_grad():
                         new_outputs = model(**new_inputs)
                         new_scores = torch.softmax(new_outputs.logits, dim=1).tolist()[0]
                     
-                    # Importance is how much scores change when word is removed
-                    importance = abs(base_scores[1] - new_scores[1])  # Use positive class score change
+                    importance = abs(base_scores[1] - new_scores[1])
                     importances.append(importance)
-                    
-                    # If removing word decreases positive score, it was contributing positively
                     contributes_positively = new_scores[1] < base_scores[1]
                     contributions.append(contributes_positively)
-                
+
                 # Normalize importances
                 max_importance = max(importances)
                 if max_importance > 0:
                     importances = [i/max_importance for i in importances]
-                
-                # Before creating the visualization
+
+                # Create custom HTML visualization
                 st.markdown("""
                 ### Visualization Results
-                The words below are colored based on their contribution to the sentiment and their score shows how strong that contribution is.
-                """)
+                Words are colored based on their contribution to the sentiment, with scores showing their importance.
                 
-                # Create visualization with black background
-                fig, ax = plt.subplots(figsize=(10, 4), facecolor='black')  # Made taller for scores
-                ax.set_facecolor('black')
+                <style>
+                .word-container {
+                    background-color: black;
+                    padding: 20px;
+                    border-radius: 10px;
+                    margin: 10px 0;
+                    line-height: 2.5;
+                }
+                .word-box {
+                    display: inline-block;
+                    margin: 0 10px;
+                    text-align: center;
+                }
+                .score {
+                    font-size: 12px;
+                    margin-bottom: 5px;
+                }
+                .word {
+                    font-size: 16px;
+                    font-weight: bold;
+                }
+                </style>
                 
-                # Plot words with their importance
-                for idx, (word, importance, is_positive) in enumerate(zip(tokens, importances, contributions)):
-                    # Brighter green for positive, red for negative
-                    color = 'limegreen' if is_positive else 'red'
-                    
-                    # Plot word at full opacity with larger font size
-                    ax.text(idx, 0.35, word, alpha=1.0,
-                           color=color, ha='center', va='center', fontsize=14)
-                    
-                    # Plot importance score above word
-                    score = f"{importance:.2f}"
-                    ax.text(idx, 0.55, score, alpha=1.0,
-                           color=color, ha='center', va='center', fontsize=10)
-                
-                ax.set_xlim(-1, len(tokens))
-                ax.set_ylim(0, 1)
-                ax.axis('off')
-                st.pyplot(fig)
-                plt.close()
-                
+                <div class="word-container">
+                """, unsafe_allow_html=True)
+
+                # Create word boxes with scores
+                html_words = []
+                for word, importance, is_positive in zip(tokens, importances, contributions):
+                    color = "rgb(50, 205, 50)" if is_positive else "rgb(255, 50, 50)"
+                    word_html = f"""
+                    <div class="word-box">
+                        <div class="score" style="color: {color}">{importance:.2f}</div>
+                        <div class="word" style="color: {color}">{word}</div>
+                    </div>
+                    """
+                    html_words.append(word_html)
+
+                # Join words and close container
+                st.markdown("".join(html_words) + "</div>", unsafe_allow_html=True)
+
             except Exception as e:
                 st.error(f"Could not generate explanation visualization: {str(e)}") 
