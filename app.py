@@ -11,9 +11,14 @@ st.markdown("""
 - **Colors**: 
   - 🟢 Green words contribute to positive sentiment
   - 🔴 Red words contribute to negative sentiment
-- **Opacity**: 
-  - More solid = Word has stronger influence
-  - More faded = Word has weaker influence
+- **Scores**: 
+  - Numbers above words show importance (0.00 to 1.00)
+  - Higher scores = Stronger influence on sentiment
+
+**Example**: In the sentence "The movie was terrible but the acting was brilliant":
+- "terrible" would be red with a high score (e.g., 0.85) showing strong negative influence
+- "brilliant" would be green with a high score (e.g., 0.90) showing strong positive influence
+- "the" and "was" would have low scores (e.g., 0.10) showing minimal influence
 """)
 
 # Load model and tokenizer
@@ -85,21 +90,26 @@ if st.button("Analyze"):
                 # Before creating the visualization
                 st.markdown("""
                 ### Visualization Results
-                The words below are colored based on their contribution to the sentiment and their opacity shows how strong that contribution is.
+                The words below are colored based on their contribution to the sentiment and their score shows how strong that contribution is.
                 """)
                 
                 # Create visualization with black background
-                fig, ax = plt.subplots(figsize=(10, 3), facecolor='black')
+                fig, ax = plt.subplots(figsize=(10, 4), facecolor='black')  # Made taller for scores
                 ax.set_facecolor('black')
                 
                 # Plot words with their importance
                 for idx, (word, importance, is_positive) in enumerate(zip(tokens, importances, contributions)):
-                    # Green if word contributes positively, red if negatively
-                    color = 'green' if is_positive else 'red'
-                    # Increase minimum opacity to 0.7, scale remaining 0.3 by importance
-                    opacity = 0.7 + (0.3 * importance)
-                    ax.text(idx, 0.5, word, alpha=opacity,
-                           color=color, ha='center', va='center')
+                    # Brighter green for positive, red for negative
+                    color = 'limegreen' if is_positive else 'red'
+                    
+                    # Plot word at full opacity with larger font size
+                    ax.text(idx, 0.35, word, alpha=1.0,
+                           color=color, ha='center', va='center', fontsize=14)
+                    
+                    # Plot importance score above word
+                    score = f"{importance:.2f}"
+                    ax.text(idx, 0.55, score, alpha=1.0,
+                           color=color, ha='center', va='center', fontsize=10)
                 
                 ax.set_xlim(-1, len(tokens))
                 ax.set_ylim(0, 1)
@@ -109,12 +119,3 @@ if st.button("Analyze"):
                 
             except Exception as e:
                 st.error(f"Could not generate explanation visualization: {str(e)}") 
-
-# After creating the visualization, add an example
-if st.button("Show Example"):
-    st.markdown("""
-    **Example**: In the sentence "The movie was terrible but the acting was brilliant":
-    - "terrible" would be red and solid (strong negative)
-    - "brilliant" would be green and solid (strong positive)
-    - "the" and "was" might be faded (less important to sentiment)
-    """) 
