@@ -48,8 +48,11 @@ class ModelAnalyzer:
         """
         Create attention pattern visualization for a specific layer and head
         """
-        # Get attention matrix for specified layer and head
-        attention_matrix = attention[layer_idx][0][head_idx].cpu().numpy()
+        # Get attention matrix for specified layer and head and move to CPU
+        attention_matrix = attention[layer_idx][0][head_idx]
+        if torch.cuda.is_available():
+            attention_matrix = attention_matrix.cpu()
+        attention_matrix = attention_matrix.detach().numpy()
         
         # Create heatmap
         fig = go.Figure(data=go.Heatmap(
