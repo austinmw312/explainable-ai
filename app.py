@@ -34,49 +34,58 @@ if st.button("Analyze"):
         st.warning("Please enter some text to analyze.")
     else:
         with st.spinner('Analyzing...'):
-            # Get base prediction
-            inputs = tokenizer(user_input, return_tensors="pt", truncation=True)
-            outputs = model(**inputs)
-            scores = torch.softmax(outputs.logits, dim=1)
-            scores = scores.tolist()[0]
-            
-            predicted_class = scores.index(max(scores))
-            confidence = max(scores)
-            
-            # Display results
-            sentiment = "POSITIVE" if predicted_class == 1 else "NEGATIVE"
-            st.write(f"**Prediction:** {sentiment}")
-            st.write(f"**Confidence:** {confidence:.2%}")
-            
             try:
-                # Get word importances by removing each word
-                tokens = tokenizer.tokenize(user_input)
-                importances = []
-                contributions = []
-                base_scores = scores
-
-                # Calculate importance of each word by removing it
-                for i in range(len(tokens)):
-                    new_tokens = tokens.copy()
-                    new_tokens[i] = tokenizer.pad_token
-                    new_text = tokenizer.convert_tokens_to_string(new_tokens)
+                # Tokenize input
+                inputs = tokenizer(user_input, return_tensors="pt", truncation=True)
+                
+                # Get embeddings and enable gradient tracking
+                embeddings = model.get_input_embeddings()
+                input_ids = inputs['input_ids']
+                embedded = embeddings(input_ids)
+                embedded.retain_grad()
+                
+                # Get prediction
+                outputs = model(inputs_embeds=embedded, attention_mask=inputs['attention_mask'])
+                scores = torch.softmax(outputs.logits, dim=1)
+                predicted_class = scores.argmax(-1).item()
+                confidence = scores[0, predicted_class].item()
+                
+                # Get gradients for predicted class
+                scores[0, predicted_class].backward()
+                
+                # Calculate importance scores
+                importance = embedded.grad.abs().mean(dim=-1)[0]
+                # Normalize importance scores
+                importance = importance / importance.max()
+                
+                # Get tokens
+                tokens = tokenizer.convert_ids_to_tokens(input_ids[0])
+                
+                # Determine contribution direction (positive/negative)
+                with torch.no_grad():
+                    # Get base positive score
+                    base_positive = scores[0, 1].item()
                     
-                    new_inputs = tokenizer(new_text, return_tensors="pt", truncation=True)
-                    with torch.no_grad():
-                        new_outputs = model(**new_inputs)
-                        new_scores = torch.softmax(new_outputs.logits, dim=1).tolist()[0]
-                    
-                    importance = abs(base_scores[1] - new_scores[1])
-                    importances.append(importance)
-                    contributes_positively = new_scores[1] < base_scores[1]
-                    contributions.append(contributes_positively)
-
-                # Normalize importances
-                max_importance = max(importances)
-                if max_importance > 0:
-                    importances = [i/max_importance for i in importances]
-
-                # Create custom HTML visualization
+                    # Check each token's contribution
+                    contributions = []
+                    for i in range(len(tokens)):
+                        # Zero out embedding for this token
+                        temp_embedded = embedded.clone()
+                        temp_embedded[0, i] = 0
+                        # Get new prediction
+                        temp_output = model(inputs_embeds=temp_embedded, 
+                                         attention_mask=inputs['attention_mask'])
+                        temp_scores = torch.softmax(temp_output.logits, dim=1)
+                        # If removing token decreases positive score, it was contributing positively
+                        contributes_positively = temp_scores[0, 1].item() < base_positive
+                        contributions.append(contributes_positively)
+                
+                # Display results
+                sentiment = "POSITIVE" if predicted_class == 1 else "NEGATIVE"
+                st.write(f"**Prediction:** {sentiment}")
+                st.write(f"**Confidence:** {confidence:.2%}")
+                
+                # Create visualization
                 st.markdown("""
                 ### Visualization Results
                 Words are colored based on their contribution to the sentiment, with scores showing their importance.
@@ -109,15 +118,16 @@ if st.button("Analyze"):
 
                 # Create word boxes with scores
                 html_words = []
-                for word, importance, is_positive in zip(tokens, importances, contributions):
-                    color = "rgb(50, 205, 50)" if is_positive else "rgb(255, 50, 50)"
-                    word_html = f"""
-                    <div class="word-box">
-                        <div class="score" style="color: {color}">{importance:.2f}</div>
-                        <div class="word" style="color: {color}">{word}</div>
-                    </div>
-                    """
-                    html_words.append(word_html)
+                for word, imp, is_positive in zip(tokens, importance, contributions):
+                    if word not in ['[CLS]', '[SEP]', '[PAD]']:  # Skip special tokens
+                        color = "rgb(50, 205, 50)" if is_positive else "rgb(255, 50, 50)"
+                        word_html = f"""
+                        <div class="word-box">
+                            <div class="score" style="color: {color}">{imp:.2f}</div>
+                            <div class="word" style="color: {color}">{word}</div>
+                        </div>
+                        """
+                        html_words.append(word_html)
 
                 # Join words and close container
                 st.markdown("".join(html_words) + "</div>", unsafe_allow_html=True)
