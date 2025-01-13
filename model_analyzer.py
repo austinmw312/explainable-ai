@@ -3,6 +3,7 @@ from transformers import GPT2LMHeadModel, GPT2Tokenizer
 import streamlit as st
 import numpy as np
 import plotly.graph_objects as go
+import pandas as pd
 
 class ModelAnalyzer:
     def __init__(self, model_name="gpt2"):
@@ -131,7 +132,9 @@ def main():
     analyzer = ModelAnalyzer(model_name)
     
     # Text input
-    text = st.text_area("Enter text to analyze:", "The quick brown fox jumps over the lazy dog")
+    text = st.text_area("Enter text to analyze:", 
+        "Theo was a mixed race boy from the South. He grew up ashamed of his heritage. "
+        "Marrying a non-white was frowned upon in his father's day and remained uncommon even in Theo's")
     
     if st.button("Analyze"):
         with st.spinner("Analyzing text..."):
@@ -148,8 +151,12 @@ def main():
         
         # Display next token predictions
         st.subheader("Top 5 next token predictions:")
-        for token, prob in results['predicted_tokens']:
-            st.write(f"{token}: {prob:.3f}")
+        df = pd.DataFrame(
+            results['predicted_tokens'],
+            columns=['Token', 'Probability']
+        )
+        df['Probability'] = df['Probability'].map('{:.1%}'.format)
+        st.table(df)
         
         # Attention visualization controls
         st.subheader("Attention Visualization")
@@ -185,8 +192,6 @@ def main():
           - Diagonal lines: Words paying attention to nearby words
           - Vertical stripes: Words that are important globally
           - Bright spots: Related words or grammatically linked words
-
-        Try this experiment: Compare attention patterns between sentences starting with "The" vs "A" vs no article!
         """)
 
 if __name__ == "__main__":
