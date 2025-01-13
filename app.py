@@ -13,11 +13,6 @@ st.markdown("""
 - **Scores**: 
   - Numbers above words show importance (0.00 to 1.00)
   - Higher scores = Stronger influence on sentiment
-
-**Example**: In the sentence "The movie was terrible but the acting was brilliant":
-- "terrible" would be red with a high score (e.g., 0.85) showing strong negative influence
-- "brilliant" would be green with a high score (e.g., 0.90) showing strong positive influence
-- "the" and "was" would have low scores (e.g., 0.10) showing minimal influence
 """)
 
 # Load model and tokenizer
@@ -88,24 +83,24 @@ if st.button("Analyze"):
                 
                 <style>
                 .word-container {
-                    background-color: black;
-                    padding: 20px;
-                    border-radius: 10px;
+                    padding: 10px;
                     margin: 10px 0;
-                    line-height: 2.5;
+                    line-height: 5.0;
                 }
                 .word-box {
                     display: inline-block;
-                    margin: 0 10px;
+                    margin: 0 10px 20px 10px;
                     text-align: center;
+                    vertical-align: top;
                 }
                 .score {
                     font-size: 12px;
-                    margin-bottom: 5px;
+                    margin-bottom: 2px;
                 }
                 .word {
                     font-size: 16px;
                     font-weight: bold;
+                    margin-top: 2px;
                 }
                 </style>
                 
