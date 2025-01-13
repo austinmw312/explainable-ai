@@ -44,21 +44,28 @@ class ModelAnalyzer:
         
         return attention, tokens
     
+    def clean_token(self, token):
+        """Clean token by removing special characters"""
+        return token.replace('Ġ', ' ').strip()
+    
     def visualize_attention(self, attention, tokens, layer_idx=0, head_idx=0):
         """
         Create attention pattern visualization for a specific layer and head
         """
+        # Clean tokens for visualization
+        clean_tokens = [self.clean_token(token) for token in tokens]
+        
         # Get attention matrix for specified layer and head and move to CPU
         attention_matrix = attention[layer_idx][0][head_idx]
         if torch.cuda.is_available():
             attention_matrix = attention_matrix.cpu()
         attention_matrix = attention_matrix.detach().numpy()
         
-        # Create heatmap
+        # Create heatmap with cleaned tokens
         fig = go.Figure(data=go.Heatmap(
             z=attention_matrix,
-            x=tokens,
-            y=tokens,
+            x=clean_tokens,
+            y=clean_tokens,
             colorscale='Viridis'
         ))
         
@@ -93,14 +100,15 @@ class ModelAnalyzer:
         top_k = 5
         topk_probs, topk_indices = torch.topk(next_token_probs, top_k)
         
+        # Clean predicted tokens
         predicted_tokens = [
-            (self.tokenizer.decode(idx.item()), prob.item())
+            (self.clean_token(self.tokenizer.decode(idx.item())), prob.item())
             for idx, prob in zip(topk_indices, topk_probs)
         ]
         
         return {
             'attention': attention,
-            'tokens': tokens,
+            'tokens': [self.clean_token(token) for token in tokens],
             'predicted_tokens': predicted_tokens
         }
 
