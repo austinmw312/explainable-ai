@@ -170,6 +170,24 @@ def main():
             head_idx
         )
         st.plotly_chart(fig)
+        
+        # After the attention visualization
+        st.markdown("""
+        ### How to Interpret the Attention Visualization:
+        - The heatmap shows how each word (y-axis) attends to other words (x-axis)
+        - Brighter colors indicate stronger attention
+        - Different layers and heads capture different types of relationships:
+          - Layer 0-3: Often capture basic patterns and local relationships
+          - Middle layers: Mix of syntactic and semantic relationships
+          - Final layers: More complex semantic relationships
+        - Common Patterns:
+          - Vertical line on first word: Many words attend to the sentence start for context
+          - Diagonal lines: Words paying attention to nearby words
+          - Vertical stripes: Words that are important globally
+          - Bright spots: Related words or grammatically linked words
+
+        Try this experiment: Compare attention patterns between sentences starting with "The" vs "A" vs no article!
+        """)
 
 if __name__ == "__main__":
     main() 
