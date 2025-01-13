@@ -109,6 +109,10 @@ def main():
     st.title("GPT-2 Model Analyzer")
     st.markdown("Analyze and visualize GPT-2's attention patterns and predictions")
     
+    # Initialize session state
+    if 'analysis_results' not in st.session_state:
+        st.session_state.analysis_results = None
+    
     # Model selection
     model_name = st.selectbox(
         "Select GPT-2 model size:",
@@ -123,37 +127,41 @@ def main():
     
     if st.button("Analyze"):
         with st.spinner("Analyzing text..."):
-            # Get analysis results
-            results = analyzer.analyze_text(text)
-            
-            # Display tokens
-            st.subheader("Tokenization:")
-            st.write(results['tokens'])
-            
-            # Display next token predictions
-            st.subheader("Top 5 next token predictions:")
-            for token, prob in results['predicted_tokens']:
-                st.write(f"{token}: {prob:.3f}")
-            
-            # Attention visualization controls
-            st.subheader("Attention Visualization")
-            num_layers = len(results['attention'])
-            num_heads = results['attention'][0].size(1)
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                layer_idx = st.slider("Select layer:", 0, num_layers-1, 0)
-            with col2:
-                head_idx = st.slider("Select attention head:", 0, num_heads-1, 0)
-            
-            # Display attention visualization
-            fig = analyzer.visualize_attention(
-                results['attention'],
-                results['tokens'],
-                layer_idx,
-                head_idx
-            )
-            st.plotly_chart(fig)
+            # Get analysis results and store in session state
+            st.session_state.analysis_results = analyzer.analyze_text(text)
+    
+    # Only show visualizations if we have results
+    if st.session_state.analysis_results is not None:
+        results = st.session_state.analysis_results
+        
+        # Display tokens
+        st.subheader("Tokenization:")
+        st.write(results['tokens'])
+        
+        # Display next token predictions
+        st.subheader("Top 5 next token predictions:")
+        for token, prob in results['predicted_tokens']:
+            st.write(f"{token}: {prob:.3f}")
+        
+        # Attention visualization controls
+        st.subheader("Attention Visualization")
+        num_layers = len(results['attention'])
+        num_heads = results['attention'][0].size(1)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            layer_idx = st.slider("Select layer:", 0, num_layers-1, 0, key='layer_slider')
+        with col2:
+            head_idx = st.slider("Select attention head:", 0, num_heads-1, 0, key='head_slider')
+        
+        # Display attention visualization
+        fig = analyzer.visualize_attention(
+            results['attention'],
+            results['tokens'],
+            layer_idx,
+            head_idx
+        )
+        st.plotly_chart(fig)
 
 if __name__ == "__main__":
     main() 
