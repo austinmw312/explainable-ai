@@ -7,23 +7,25 @@ import pandas as pd
 
 class ModelAnalyzer:
     def __init__(self, model_name="gpt2"):
-        """
-        Initialize the model analyzer with a specific GPT-2 model variant
-        model_name can be: 'gpt2', 'gpt2-medium', 'gpt2-large', or 'gpt2-xl'
-        """
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        """Initialize the model analyzer with GPT-2 base model"""
+        self.device = "cpu"  # Force CPU for deployment
         
-        # Load model and tokenizer
-        @st.cache_resource
+        # Load model and tokenizer with memory management
+        @st.cache_resource(max_entries=1)
         def load_model_and_tokenizer(name):
-            tokenizer = GPT2Tokenizer.from_pretrained(name)
-            model = GPT2LMHeadModel.from_pretrained(name, output_attentions=True)
-            model = model.to(self.device)
-            return model, tokenizer
+            try:
+                tokenizer = GPT2Tokenizer.from_pretrained(name)
+                model = GPT2LMHeadModel.from_pretrained(name, output_attentions=True)
+                model = model.to(self.device)
+                return model, tokenizer
+            except Exception as e:
+                st.error(f"Error loading model: {str(e)}")
+                return None, None
         
         self.model, self.tokenizer = load_model_and_tokenizer(model_name)
-        self.model.eval()  # Set to evaluation mode
-        
+        if self.model is not None:
+            self.model.eval()
+
     def get_attention_patterns(self, text):
         """
         Get attention patterns for all layers and heads
@@ -113,86 +115,108 @@ class ModelAnalyzer:
             'predicted_tokens': predicted_tokens
         }
 
-# Example usage in Streamlit app:
 def main():
     st.title("GPT-2 Model Analyzer")
-    st.markdown("Analyze and visualize GPT-2's attention patterns and predictions")
+    st.markdown("""
+    Analyze and visualize GPT-2's attention patterns and predictions.
+    
+    Note: This demo uses the base GPT-2 model for performance reasons.
+    For larger models and more features, consider running locally.
+    """)
     
     # Initialize session state
     if 'analysis_results' not in st.session_state:
         st.session_state.analysis_results = None
     
-    # Model selection
-    model_name = st.selectbox(
-        "Select GPT-2 model size:",
-        ["gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl"]
-    )
+    # Simplified model selection for deployment
+    model_name = "gpt2"  # Only use base model
     
-    # Initialize analyzer
-    analyzer = ModelAnalyzer(model_name)
-    
-    # Text input
-    text = st.text_area("Enter text to analyze:", 
-        "Theo was a mixed race boy from the South. He grew up ashamed of his heritage. "
-        "Marrying a non-white was frowned upon in his father's day and remained uncommon even in Theo's")
-    
-    if st.button("Analyze"):
-        with st.spinner("Analyzing text..."):
-            # Get analysis results and store in session state
-            st.session_state.analysis_results = analyzer.analyze_text(text)
-    
-    # Only show visualizations if we have results
-    if st.session_state.analysis_results is not None:
-        results = st.session_state.analysis_results
+    try:
+        # Initialize analyzer
+        analyzer = ModelAnalyzer(model_name)
         
-        # Display tokens
-        st.subheader("Tokenization:")
-        st.write(results['tokens'])
-        
-        # Display next token predictions
-        st.subheader("Top 5 next token predictions:")
-        df = pd.DataFrame(
-            results['predicted_tokens'],
-            columns=['Token', 'Probability']
+        # Text input with length limit
+        default_text = (
+            "The lighthouse keeper watched the approaching storm. The waves grew larger with each passing hour until they reached a"
         )
-        df['Probability'] = df['Probability'].map('{:.1%}'.format)
-        st.table(df)
-        
-        # Attention visualization controls
-        st.subheader("Attention Visualization")
-        num_layers = len(results['attention'])
-        num_heads = results['attention'][0].size(1)
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            layer_idx = st.slider("Select layer:", 0, num_layers-1, 0, key='layer_slider')
-        with col2:
-            head_idx = st.slider("Select attention head:", 0, num_heads-1, 0, key='head_slider')
-        
-        # Display attention visualization
-        fig = analyzer.visualize_attention(
-            results['attention'],
-            results['tokens'],
-            layer_idx,
-            head_idx
+        text = st.text_area(
+            "Enter text to analyze (max 500 characters):", 
+            default_text,
+            max_chars=500
         )
-        st.plotly_chart(fig)
         
-        # After the attention visualization
-        st.markdown("""
-        ### How to Interpret the Attention Visualization:
-        - The heatmap shows how each word (y-axis) attends to other words (x-axis)
-        - Brighter colors indicate stronger attention
-        - Different layers and heads capture different types of relationships:
-          - Layer 0-3: Often capture basic patterns and local relationships
-          - Middle layers: Mix of syntactic and semantic relationships
-          - Final layers: More complex semantic relationships
-        - Common Patterns:
-          - Vertical line on first word: Many words attend to the sentence start for context
-          - Diagonal lines: Words paying attention to nearby words
-          - Vertical stripes: Words that are important globally
-          - Bright spots: Related words or grammatically linked words
-        """)
+        if st.button("Analyze"):
+            if len(text) > 500:
+                st.warning("Please enter shorter text (max 500 characters)")
+            else:
+                with st.spinner("Analyzing text... (this may take a moment)"):
+                    try:
+                        st.session_state.analysis_results = analyzer.analyze_text(text)
+                    except RuntimeError as e:
+                        if "out of memory" in str(e):
+                            st.error("Sorry, the model ran out of memory. Try with shorter text.")
+                        else:
+                            st.error(f"An error occurred: {str(e)}")
+                    except Exception as e:
+                        st.error(f"An unexpected error occurred: {str(e)}")
+        
+        # Only show visualizations if we have results
+        if st.session_state.analysis_results is not None:
+            results = st.session_state.analysis_results
+            
+            # Display tokens
+            with st.expander("Show Tokenization"):
+                st.write(results['tokens'])
+            
+            # Display next token predictions
+            st.subheader("Top 5 next token predictions:")
+            df = pd.DataFrame(
+                results['predicted_tokens'],
+                columns=['Token', 'Probability']
+            )
+            # Add 1-indexed numbers
+            df.index = range(1, len(df) + 1)
+            df['Probability'] = df['Probability'].map('{:.1%}'.format)
+            st.table(df)
+            
+            # Attention visualization controls
+            st.subheader("Attention Visualization")
+            num_layers = len(results['attention'])
+            num_heads = results['attention'][0].size(1)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                layer_idx = st.slider("Select layer:", 0, num_layers-1, 0, key='layer_slider')
+            with col2:
+                head_idx = st.slider("Select attention head:", 0, num_heads-1, 0, key='head_slider')
+            
+            # Display attention visualization
+            try:
+                fig = analyzer.visualize_attention(
+                    results['attention'],
+                    results['tokens'],
+                    layer_idx,
+                    head_idx
+                )
+                st.plotly_chart(fig)
+                
+                st.markdown("""
+                ### How to Interpret the Attention Visualization:
+                - The heatmap shows how each word (y-axis) attends to other words (x-axis)
+                - Brighter colors indicate stronger attention
+                - Different layers and heads capture different types of relationships
+                - Common Patterns:
+                  - Vertical line on first word: Many words attend to the sentence start for context
+                  - Diagonal lines: Words paying attention to nearby words
+                  - Vertical stripes: Words that are important globally
+                  - Bright spots: Related words or grammatically linked words
+                """)
+            except Exception as e:
+                st.error(f"Error generating visualization: {str(e)}")
+    
+    except Exception as e:
+        st.error(f"Application error: {str(e)}")
+        st.info("Please try refreshing the page or contact support if the error persists.")
 
 if __name__ == "__main__":
     main() 
