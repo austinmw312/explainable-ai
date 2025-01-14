@@ -121,6 +121,44 @@ class ModelAnalyzer:
             'tokens': [self.clean_token(token) for token in tokens],
             'predicted_tokens': predicted_tokens
         }
+    
+    def visualize_token_influence(self, text, tokens):
+        """Visualize how each token influences the final prediction"""
+        # Get embeddings and create tensor that requires gradient
+        embeddings = self.model.get_input_embeddings()
+        tokens_tensor = self.tokenizer(text, return_tensors="pt")['input_ids'].to(self.device)
+        token_embeddings = embeddings(tokens_tensor)
+        token_embeddings.retain_grad()
+        
+        # Forward pass with gradient tracking
+        outputs = self.model(inputs_embeds=token_embeddings)
+        # Get gradients for the last token prediction
+        outputs.logits[:, -1, :].sum().backward()
+        
+        # Calculate influence scores
+        influence = token_embeddings.grad.abs().mean(dim=-1)[0].cpu()
+        influence_values = influence.detach().numpy()
+        
+        # Create influence bar chart
+        fig = go.Figure(data=go.Bar(
+            x=[self.clean_token(t) for t in tokens],
+            y=influence_values,
+            marker=dict(
+                color=influence_values,
+                colorscale='Viridis'
+            )
+        ))
+        
+        # Update layout
+        fig.update_layout(
+            title='Token Influence on Final Prediction',
+            xaxis_title="Tokens",
+            yaxis_title="Influence Score",
+            width=800,
+            height=400
+        )
+        
+        return fig
 
 def main():
     st.title("GPT-2 Model Analyzer")
@@ -205,7 +243,7 @@ def main():
                     layer_idx,
                     head_idx
                 )
-                st.plotly_chart(fig)
+                st.plotly_chart(fig, key="attention_plot")
                 
                 st.markdown("""
                 ### How to Interpret the Attention Visualization:
@@ -218,6 +256,12 @@ def main():
                   - Vertical stripes: Words that are important globally
                   - Bright spots: Related words or grammatically linked words
                 """)
+                
+                # Add Token Influence Visualization
+                st.subheader("Token Influence Analysis")
+                influence_fig = analyzer.visualize_token_influence(text, results['tokens'])
+                st.plotly_chart(influence_fig, key="influence_plot")
+                
             except Exception as e:
                 st.error(f"Error generating visualization: {str(e)}")
     
