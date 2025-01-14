@@ -5,6 +5,13 @@ import numpy as np
 import plotly.graph_objects as go
 import pandas as pd
 
+# Set page title and other configurations
+st.set_page_config(
+    page_title="GPT-2 Model Analyzer",
+    page_icon="🤖",  # Optional: adds an icon to the tab
+    layout="wide"     # Optional: uses full width of the browser
+)
+
 class ModelAnalyzer:
     def __init__(self, model_name="gpt2"):
         """Initialize the model analyzer with GPT-2 base model"""
