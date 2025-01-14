@@ -11,7 +11,7 @@ An interactive web application for visualizing and analyzing how GPT-2 processes
 
 ## Live Demo
 
-Visit [Streamlit Cloud URL] to try the application.
+Visit https://gpt2analyzer.streamlit.app/ to try the application.
 
 ## Running Locally
 
