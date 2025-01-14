@@ -1,13 +1,13 @@
 # GPT-2 Model Analyzer
 
-An interactive web application for visualizing and analyzing how GPT-2 processes and understands text. This tool provides insights into the model's attention patterns and next-token predictions.
+An interactive web application for visualizing and analyzing how GPT-2 processes and understands text. This tool provides insights into the model's attention patterns, internal activations, and decision-making process.
 
 ## Features
 
 - **Attention Visualization**: See how different parts of the model attend to words in the input text
+- **Token Influence Analysis**: Understand which input tokens most strongly affect the model's predictions
+- **Layer Activation Patterns**: Visualize how information flows through the model's layers
 - **Token Prediction**: View the top 5 most likely next words with their probabilities
-- **Interactive Controls**: Explore different layers and attention heads of the model
-- **Token Analysis**: Examine how the model tokenizes input text
 
 ## Live Demo
 
@@ -58,16 +58,21 @@ streamlit run model_analyzer.py
 1. Enter text in the input area (max 500 characters)
 2. Click "Analyze" to process the text
 3. Explore the results:
-   - View token predictions
-   - Use the sliders to explore different attention layers and heads
-   - Examine the attention visualization heatmap
+   - View token predictions and probabilities
+   - Examine attention patterns across different layers
+   - See which tokens have the most influence on predictions
+   - Explore activation patterns through model layers
+   - Understand implications for AI interpretability
 
 ## Technical Details
 
 - Uses the base GPT-2 model for analysis
-- Runs on CPU for compatibility
-- Visualizes attention patterns using Plotly
-- Built with Streamlit for the user interface
+- Visualizes three key aspects of model behavior:
+  - Attention patterns between tokens
+  - Token influence on predictions
+  - Layer-wise activation patterns
+- Built with PyTorch, Streamlit, and Plotly
+- Runs on CPU for broad compatibility
 
 ## Limitations
 
