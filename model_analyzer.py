@@ -61,11 +61,12 @@ class ModelAnalyzer:
     def visualize_attention(self, attention, tokens, layer_idx=0, head_idx=0):
         """
         Create attention pattern visualization for a specific layer and head
+        Note: layer_idx 0 is the first transformer layer (after embeddings)
         """
         # Clean tokens for visualization
         clean_tokens = [self.clean_token(token) for token in tokens]
         
-        # Get attention matrix for specified layer and head and move to CPU
+        # Get attention matrix for specified layer and move to CPU
         attention_matrix = attention[layer_idx][0][head_idx]
         if torch.cuda.is_available():
             attention_matrix = attention_matrix.cpu()
@@ -79,9 +80,9 @@ class ModelAnalyzer:
             colorscale='Viridis'
         ))
         
-        # Update layout
+        # Update layout with clear layer numbering
         fig.update_layout(
-            title=f'Attention Pattern (Layer {layer_idx}, Head {head_idx})',
+            title=f'Attention Pattern (Layer {layer_idx + 1}, Head {head_idx})',  # Add 1 to match activation numbering
             xaxis_title="Target Tokens",
             yaxis_title="Source Tokens",
             width=800,
@@ -94,18 +95,20 @@ class ModelAnalyzer:
         """
         Perform complete analysis of input text
         """
-        # Get attention patterns
-        attention, tokens = self.get_attention_patterns(text)
-        
-        # Get model prediction
-        inputs = self.tokenizer(text, return_tensors="pt")
-        inputs = inputs.to(self.device)
+        # Get attention patterns and hidden states
+        inputs = self.tokenizer(text, return_tensors="pt").to(self.device)
         with torch.no_grad():
-            outputs = self.model(**inputs)
-            logits = outputs.logits
-            
+            outputs = self.model(
+                **inputs,
+                output_attentions=True,
+                output_hidden_states=True
+            )
+        
+        attention = outputs.attentions
+        tokens = self.tokenizer.convert_ids_to_tokens(inputs['input_ids'][0])
+        
         # Get next token prediction
-        next_token_logits = logits[0, -1, :]
+        next_token_logits = outputs.logits[0, -1, :]
         next_token_probs = torch.softmax(next_token_logits, dim=-1)
         top_k = 5
         topk_probs, topk_indices = torch.topk(next_token_probs, top_k)
@@ -119,7 +122,8 @@ class ModelAnalyzer:
         return {
             'attention': attention,
             'tokens': [self.clean_token(token) for token in tokens],
-            'predicted_tokens': predicted_tokens
+            'predicted_tokens': predicted_tokens,
+            'hidden_states': outputs.hidden_states
         }
     
     def visualize_token_influence(self, text, tokens):
@@ -159,6 +163,57 @@ class ModelAnalyzer:
         )
         
         return fig
+    
+    def visualize_layer_activations(self, text, tokens):
+        """Visualize activation patterns across all layers"""
+        try:
+            # Get model outputs with hidden states
+            inputs = self.tokenizer(text, return_tensors="pt").to(self.device)
+            with torch.no_grad():
+                outputs = self.model(
+                    **inputs,
+                    output_hidden_states=True
+                )
+                
+                # Stack all hidden states and move to CPU
+                hidden_states = torch.stack(outputs.hidden_states).to('cpu')
+                
+                # Print shape information for debugging
+                print(f"Hidden states shape: {hidden_states.shape}")
+                
+                # Calculate activation magnitudes and squeeze out batch dimension
+                activation_magnitudes = hidden_states.abs().mean(dim=-1).squeeze(1).detach().numpy()
+                print(f"Activation magnitudes shape: {activation_magnitudes.shape}")
+                print(f"Activation range: {activation_magnitudes.min():.3f} to {activation_magnitudes.max():.3f}")
+                
+                # Create heatmap
+                fig = go.Figure(data=go.Heatmap(
+                    z=activation_magnitudes,
+                    x=[self.clean_token(t) for t in tokens],
+                    y=[
+                        "Embedding Layer" if i == 0 
+                        else f"Layer {i}" if i < 12
+                        else "Output Layer" 
+                        for i in range(hidden_states.shape[0])
+                    ],
+                    colorscale='Viridis',
+                    showscale=True,
+                    zmin=0  # Force minimum value to be 0 for better contrast
+                ))
+                
+                # Update layout
+                fig.update_layout(
+                    title='Layer Activation Patterns',
+                    xaxis_title="Tokens",
+                    yaxis_title="Model Layers",
+                    width=800,
+                    height=600
+                )
+                
+                return fig
+        except Exception as e:
+            print(f"Error in layer activation visualization: {str(e)}")
+            raise e
 
 def main():
     st.title("GPT-2 Model Analyzer")
@@ -231,7 +286,7 @@ def main():
             
             col1, col2 = st.columns(2)
             with col1:
-                layer_idx = st.slider("Select layer:", 0, num_layers-1, 0, key='layer_slider')
+                layer_idx = st.slider("Select transformer layer:", 1, num_layers, 1, key='layer_slider') - 1  # 1-based for display
             with col2:
                 head_idx = st.slider("Select attention head:", 0, num_heads-1, 0, key='head_slider')
             
@@ -261,6 +316,28 @@ def main():
                 st.subheader("Token Influence Analysis")
                 influence_fig = analyzer.visualize_token_influence(text, results['tokens'])
                 st.plotly_chart(influence_fig, key="influence_plot")
+                
+                # Add Layer Activations Visualization
+                st.subheader("Layer Activation Analysis")
+                st.markdown("""
+                This heatmap shows how strongly each layer responds to different tokens.
+                Brighter colors indicate stronger activations, revealing how information flows through the model's layers.
+                Early layers often capture basic features while deeper layers develop more abstract representations.
+                """)
+                activation_fig = analyzer.visualize_layer_activations(text, results['tokens'])
+                st.plotly_chart(activation_fig, key="activation_plot")
+                
+                st.markdown("""
+                ### Understanding Layer Activation Patterns:
+                - **Embedding Layer (Layer 0)**: Converts tokens into initial vector representations
+                - **Early Layers (1-4)**: Process basic features like syntax and word relationships
+                - **Middle Layers (5-8)**: Develop more complex patterns and semantic understanding
+                - **Late Layers (9-11)**: Show high activation as they assemble final representations
+                - **Output Layer (12)**: Shows uniform, lower activation as it normalizes the final layer's output
+                
+                The bright activations in Layer 11 followed by uniform lower activations in Layer 12 is a typical pattern:
+                Layer 11 is making the final computational decisions, while Layer 12 standardizes these outputs for the final prediction.
+                """)
                 
             except Exception as e:
                 st.error(f"Error generating visualization: {str(e)}")
