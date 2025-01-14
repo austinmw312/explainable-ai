@@ -339,6 +339,21 @@ def main():
                 Layer 11 is making the final computational decisions, while Layer 12 standardizes these outputs for the final prediction.
                 """)
                 
+                # Add AI Safety Implications section
+                st.markdown("""
+                ### Implications for AI Safety & Interpretability
+                
+                These visualizations provide important insights for AI safety and interpretability:
+                
+                - **Model Transparency**: Helps identify potential biases, failure modes, and unexpected dependencies in the model's decision-making process
+                
+                - **Safety Monitoring**: Can detect unusual activation patterns that might indicate adversarial inputs or model confusion
+                
+                - **Alignment Verification**: Shows whether the model is attending to appropriate context and basing decisions on relevant information
+                
+                While these visualizations offer valuable insights into model behavior, they represent only a partial view of the model's internal processing. They are most useful as part of a broader approach to AI interpretability and safety monitoring.
+                """)
+                
             except Exception as e:
                 st.error(f"Error generating visualization: {str(e)}")
     
