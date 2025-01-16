@@ -4,12 +4,19 @@ import streamlit as st
 import numpy as np
 import plotly.graph_objects as go
 import pandas as pd
+import plotly.express as px
+
+# Define color schemes
+ATTENTION_COLORSCALE = 'Viridis' 
+ACTIVATION_COLORSCALE = 'Viridis'
+INFLUENCE_COLORSCALE = 'Viridis'
+PREDICTION_COLORS = px.colors.qualitative.Set1
 
 # Set page title and other configurations
 st.set_page_config(
     page_title="GPT-2 Model Analyzer",
-    page_icon="🤖",  # Optional: adds an icon to the tab
-    layout="wide"     # Optional: uses full width of the browser
+    page_icon="🤖",
+    layout="wide"
 )
 
 class ModelAnalyzer:
@@ -77,7 +84,7 @@ class ModelAnalyzer:
             z=attention_matrix,
             x=clean_tokens,
             y=clean_tokens,
-            colorscale='Viridis'
+            colorscale=ATTENTION_COLORSCALE
         ))
         
         # Update layout with clear layer numbering
@@ -149,7 +156,7 @@ class ModelAnalyzer:
             y=influence_values,
             marker=dict(
                 color=influence_values,
-                colorscale='Viridis'
+                colorscale=INFLUENCE_COLORSCALE
             )
         ))
         
@@ -196,7 +203,7 @@ class ModelAnalyzer:
                         else "Output Layer" 
                         for i in range(hidden_states.shape[0])
                     ],
-                    colorscale='Viridis',
+                    colorscale=ACTIVATION_COLORSCALE,
                     showscale=True,
                     zmin=0  # Force minimum value to be 0 for better contrast
                 ))
@@ -251,7 +258,8 @@ class ModelAnalyzer:
                         x=list(range(len(layer_probs))),
                         y=[probs[i] for probs in layer_probs],
                         name=f'"{top_tokens[i]}"',
-                        mode='lines+markers'
+                        mode='lines+markers',
+                        line=dict(color=PREDICTION_COLORS[i])
                     ))
                 
                 # Update layout
@@ -305,6 +313,9 @@ def main():
         )
         
         if st.button("Analyze"):
+            # Strip trailing whitespace from input text
+            text = text.rstrip()
+            
             if len(text) > 500:
                 st.warning("Please enter shorter text (max 500 characters)")
             else:
@@ -337,7 +348,7 @@ def main():
             df['Probability'] = df['Probability'].map('{:.1%}'.format)
             st.table(df)
             
-            # Add Prediction Flow Visualization
+            # Prediction Flow
             st.subheader("Prediction Probability Flow")
             st.markdown("""
             This visualization shows how the model's confidence in different token predictions evolves through the layers.
@@ -357,7 +368,7 @@ def main():
             
             col1, col2 = st.columns(2)
             with col1:
-                layer_idx = st.slider("Select transformer layer:", 1, num_layers, 1, key='layer_slider') - 1  # 1-based for display
+                layer_idx = st.slider("Select transformer layer:", 1, num_layers, 1, key='layer_slider') - 1
             with col2:
                 head_idx = st.slider("Select attention head:", 0, num_heads-1, 0, key='head_slider')
             
