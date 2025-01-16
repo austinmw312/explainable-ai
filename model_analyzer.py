@@ -214,6 +214,65 @@ class ModelAnalyzer:
         except Exception as e:
             print(f"Error in layer activation visualization: {str(e)}")
             raise e
+    
+    def visualize_prediction_flow(self, text, tokens):
+        """Visualize how prediction probabilities evolve through layers"""
+        try:
+            # Get model outputs with hidden states
+            inputs = self.tokenizer(text, return_tensors="pt").to(self.device)
+            with torch.no_grad():
+                # Get all hidden states
+                outputs = self.model(
+                    **inputs,
+                    output_hidden_states=True
+                )
+                
+                # Track probabilities through layers
+                layer_probs = []
+                for hidden_state in outputs.hidden_states:
+                    # Project hidden state to vocabulary
+                    logits = self.model.lm_head(hidden_state)
+                    # Get probabilities for next token
+                    probs = torch.softmax(logits[0, -1, :], dim=-1)
+                    # Get top 5 tokens and their probabilities
+                    top_probs, top_indices = probs.topk(5)
+                    layer_probs.append(top_probs.cpu().numpy())
+                
+                # Create line plot
+                fig = go.Figure()
+                
+                # Get token labels for legend
+                top_tokens = [self.clean_token(self.tokenizer.decode(idx.item())) 
+                             for idx in top_indices]
+                
+                # Add a line for each top token
+                for i in range(5):
+                    fig.add_trace(go.Scatter(
+                        x=list(range(len(layer_probs))),
+                        y=[probs[i] for probs in layer_probs],
+                        name=f'"{top_tokens[i]}"',
+                        mode='lines+markers'
+                    ))
+                
+                # Update layout
+                fig.update_layout(
+                    title='Prediction Probability Flow Through Layers',
+                    xaxis_title="Layer",
+                    yaxis_title="Probability",
+                    xaxis=dict(
+                        ticktext=["Embedding"] + [f"Layer {i}" for i in range(1, 12)] + ["Output"],
+                        tickvals=list(range(13))
+                    ),
+                    width=800,
+                    height=400,
+                    yaxis_range=[0, 1]
+                )
+                
+                return fig
+                
+        except Exception as e:
+            print(f"Error in prediction flow visualization: {str(e)}")
+            raise e
 
 def main():
     st.title("GPT-2 Model Analyzer")
@@ -274,13 +333,25 @@ def main():
                 results['predicted_tokens'],
                 columns=['Token', 'Probability']
             )
-            # Add 1-indexed numbers
             df.index = range(1, len(df) + 1)
             df['Probability'] = df['Probability'].map('{:.1%}'.format)
             st.table(df)
             
-            # Attention visualization controls
+            # Add Prediction Flow Visualization
+            st.subheader("Prediction Probability Flow")
+            st.markdown("""
+            This visualization shows how the model's confidence in different token predictions evolves through the layers.
+            Each line represents one of the top 5 predicted tokens, showing how its probability changes as the input flows through the model.
+            """)
+            flow_fig = analyzer.visualize_prediction_flow(text, results['tokens'])
+            st.plotly_chart(flow_fig, key="flow_plot")
+            
+            # Attention visualization
             st.subheader("Attention Visualization")
+            st.markdown("""
+            This heatmap shows how each token in the sequence attends to other tokens, revealing the model's focus patterns at different layers.
+            """)
+            
             num_layers = len(results['attention'])
             num_heads = results['attention'][0].size(1)
             
@@ -312,8 +383,12 @@ def main():
                   - Bright spots: Related words or grammatically linked words
                 """)
                 
-                # Add Token Influence Visualization
+                # Token Influence visualization
                 st.subheader("Token Influence Analysis")
+                st.markdown("""
+                This visualization shows how much each input token contributes to the model's final prediction, with higher bars indicating stronger influence.
+                """)
+                
                 influence_fig = analyzer.visualize_token_influence(text, results['tokens'])
                 st.plotly_chart(influence_fig, key="influence_plot")
                 
